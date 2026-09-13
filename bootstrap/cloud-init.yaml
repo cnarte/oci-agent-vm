@@ -1,0 +1,68 @@
+#cloud-config
+# Full first-boot bootstrap. Credentials are intentionally not embedded.
+package_update: true
+packages:
+  - zsh
+  - git
+  - curl
+  - wget
+  - jq
+  - openssl
+  - ca-certificates
+  - dbus-x11
+  - xfce4
+  - tigervnc-standalone-server
+  - novnc
+  - websockify
+  - nodejs
+  - npm
+
+write_files:
+  - path: /home/ubuntu/.vnc/xstartup
+    owner: ubuntu:ubuntu
+    permissions: '0700'
+    content: |
+      #!/bin/sh
+      unset SESSION_MANAGER
+      unset DBUS_SESSION_BUS_ADDRESS
+      xrdb "$HOME/.Xresources" 2>/dev/null || true
+      exec dbus-launch --exit-with-session startxfce4
+  - path: /opt/telegram.env.example
+    owner: root:root
+    permissions: '0644'
+    content: |
+      # Copy to ~/.hermes/.env and replace placeholders.
+      TELEGRAM_BOT_TOKEN=1234567890:REPLACE_WITH_BOTFATHER_TOKEN
+      TELEGRAM_ALLOWED_USERS=REPLACE_WITH_TELEGRAM_USER_ID
+  - path: /home/ubuntu/.config/remote-desktop/start-chrome.sh
+    owner: ubuntu:ubuntu
+    permissions: '0700'
+    content: |
+      #!/bin/sh
+      export DISPLAY=:1
+      export XAUTHORITY=/home/ubuntu/.Xauthority
+      export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
+      exec /usr/bin/google-chrome --no-sandbox --display=:1 \
+        --remote-debugging-address=127.0.0.1 --remote-debugging-port=9222 \
+        --password-store=basic --user-data-dir=/home/ubuntu/.config/chrome-agent-profile \
+        --no-first-run --no-default-browser-check about:blank
+
+runcmd:
+  - [ bash, -lc, 'install -d -o ubuntu -g ubuntu -m 700 /home/ubuntu/.vnc /home/ubuntu/.config/remote-desktop /home/ubuntu/.config/chrome-agent-profile' ]
+  - [ bash, -lc, 'chsh -s /usr/bin/zsh ubuntu' ]
+  - [ bash, -lc, 'curl -LsSf https://astral.sh/uv/install.sh | su - ubuntu -c "sh"' ]
+  - [ bash, -lc, 'curl -fsSL https://dl.google.com/linux/direct/google-chrome-stable_current_arm64.deb -o /tmp/google-chrome.deb && apt-get install -y /tmp/google-chrome.deb' ]
+  - [ bash, -lc, 'su - ubuntu -c "export PATH=\$HOME/.local/bin:\$PATH; uv tool install yt-dlp; uv tool install \"agent-reach[all] @ https://github.com/Panniantong/agent-reach/archive/main.zip\""' ]
+  - [ bash, -lc, 'npm install -g @earendil-works/pi-coding-agent cc-connect agent-browser' ]
+  - [ bash, -lc, 'su - ubuntu -c "export PATH=\$HOME/.local/bin:\$PATH; mkdir -p \$HOME/.hermes; cp /opt/telegram.env.example \$HOME/.hermes/.env.example; chmod 600 \$HOME/.hermes/.env.example"' ]
+  - [ bash, -lc, 'curl -fsSL https://tailscale.com/install.sh | sh' ]
+  - [ bash, -lc, 'install -d -o ubuntu -g ubuntu -m 700 /home/ubuntu/.config/remote-desktop; pw=$(openssl rand -base64 24 | tr -dc A-Za-z0-9 | head -c 16); printf "%s" "$pw" | vncpasswd -f > /home/ubuntu/.vnc/passwd; printf "%s\n" "$pw" > /home/ubuntu/.config/remote-desktop/vnc-password.txt; chown ubuntu:ubuntu /home/ubuntu/.vnc/passwd /home/ubuntu/.config/remote-desktop/vnc-password.txt; chmod 600 /home/ubuntu/.vnc/passwd /home/ubuntu/.config/remote-desktop/vnc-password.txt' ]
+  - [ bash, -lc, 'su - ubuntu -c "vncserver :1 -localhost yes -geometry 1440x900 -depth 24"' ]
+  - [ bash, -lc, 'nohup websockify --web=/usr/share/novnc --heartbeat=30 127.0.0.1:6080 127.0.0.1:5901 >/home/ubuntu/.config/remote-desktop/novnc.log 2>&1 &' ]
+  - [ bash, -lc, 'su - ubuntu -c "nohup /home/ubuntu/.config/remote-desktop/start-chrome.sh >/home/ubuntu/.config/remote-desktop/chrome.log 2>&1 &"' ]
+
+# Manual, credentialed steps after first boot:
+#   sudo tailscale up
+#   cp ~/.hermes/.env.example ~/.hermes/.env && $EDITOR ~/.hermes/.env
+#   hermes config set browser.engine chrome
+#   hermes config set browser.cdp_url http://127.0.0.1:9222
