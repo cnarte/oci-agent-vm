@@ -1,53 +1,52 @@
-# OCI Agent VM
+# Personal Browser + Hermes Agent VM on OCI
 
-Terraform inventory and bootstrap artifacts for an OCI ARM64 Ubuntu agent VM.
+This repo creates a fresh ARM64 Ubuntu VM for a personal browser agent and Hermes Agent.
+Terraform provisions the OCI network and VM; cloud-init installs the complete software stack.
+It does **not** modify this account unless you run it with this account's OCI profile.
 
-## Safety model
+## One-file setup path
 
-This is a reusable tutorial: by default it creates a complete, separate OCI VM/network in the
-account selected by the user's OCI profile. It does not target or modify the author's account.
-Set `enable_provisioning = false` for read-only discovery. Never commit credentials, cookies,
-private keys, or browser profiles.
-
-## Discovered baseline
-
-- Region: `ap-mumbai-1`
-- Availability domain: `AP-MUMBAI-1-AD-1`
-- Shape: `VM.Standard.A1.Flex`
-- Existing VCN CIDR: `10.0.0.0/16`
-- Existing agent subnet CIDR: `10.0.1.0/24`
-- OS: Ubuntu 22.04 ARM64
-
-## Usage
-
-Requires Terraform and the OCI CLI config profile. No API keys are committed.
+1. Install and authenticate the OCI CLI locally (`oci setup config`).
+2. Install Terraform >= 1.6.
+3. Clone this repo.
+4. Edit only [`settings.yaml`](settings.yaml): tenancy/compartment OCID, region, VM size, and your SSH public key.
+5. Run:
 
 ```bash
-cd terraform
-cp terraform.tfvars.example terraform.tfvars
-# Set tenancy_ocid and ssh_public_key for your own OCI account.
-terraform init
-terraform fmt
-terraform plan
-terraform apply
+./setup.sh
 ```
 
-The default creates a new VCN, subnet, public-IP VM, and internet gateway. To inspect an existing
-account without changes, set `enable_provisioning = false` and provide the existing resource IDs.
+The script converts the YAML to a temporary ignored Terraform variable file, runs `init`,
+`validate`, `plan`, and `apply`, then removes the generated file. Review the plan before
+confirming `apply`.
 
-## Bootstrap and Telegram setup
+## What it creates and installs
 
-See [`bootstrap/SETUP.md`](bootstrap/SETUP.md) for the complete post-provisioning walkthrough.
-The Telegram template is [`bootstrap/telegram.env.example`](bootstrap/telegram.env.example): copy it
-to `~/.hermes/.env` and replace the BotFather token and allowed Telegram user ID placeholders.
+Terraform creates a VCN, internet gateway, route table, public subnet, and ARM64
+`VM.Standard.A1.Flex` instance. Cloud-init installs:
 
-The cloud-init module installs and configures, for each fresh VM:
+- zsh, XFCE, TigerVNC, noVNC, and websockify
+- official Google Chrome for Linux ARM64
+- persistent Chrome profile and loopback CDP on port 9222
+- uv, Agent Reach, pi, and cc-connect
+- Tailscale (authentication remains an explicit manual step)
 
-- zsh (with the user's existing Oh My Zsh setup instructions)
-- uv-managed Python tools
-- pi and cc-connect
-- official Google Chrome ARM64
-- persistent Chrome profile with local CDP
-- XFCE + TigerVNC + noVNC behind Tailscale Serve
+After first boot:
 
-No credentials, cookies, SSH private keys, or Chrome profiles belong in this repository.
+```bash
+sudo tailscale up
+cp ~/.hermes/.env.example ~/.hermes/.env
+$EDITOR ~/.hermes/.env                 # add TELEGRAM_BOT_TOKEN if desired
+hermes config set browser.engine chrome
+hermes config set browser.cdp_url http://127.0.0.1:9222
+```
+
+Use Tailscale Serve to publish noVNC to the tailnet only; never expose VNC or CDP directly
+through OCI security rules. Telegram tokens, Tailscale auth keys, OCI keys, SSH private keys,
+and Chrome profiles are intentionally not stored in this repository.
+
+## Read-only discovery
+
+To inspect an existing account without creating resources, set `enable_provisioning: false`
+in `settings.yaml` and provide existing `vcn_id`, `subnet_id`, and `instance_id` values in a
+local generated variable file, or run Terraform with those variables explicitly.

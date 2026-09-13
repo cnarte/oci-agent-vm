@@ -5,3 +5,4 @@ terraform/terraform.tfvars
 *.pem
 *.key
 .env
+terraform/settings.auto.tfvars.json

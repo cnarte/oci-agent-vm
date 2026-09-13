@@ -17,13 +17,15 @@ variable "tenancy_ocid" {
 }
 
 variable "vcn_id" {
-  description = "Existing VCN OCID."
+  description = "Existing VCN OCID for read-only mode."
   type        = string
+  default     = ""
 }
 
 variable "subnet_id" {
-  description = "Existing subnet OCID."
+  description = "Existing subnet OCID for read-only mode."
   type        = string
+  default     = ""
 }
 
 variable "instance_id" {
