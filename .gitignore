@@ -6,3 +6,4 @@ terraform/terraform.tfvars
 *.key
 .env
 terraform/settings.auto.tfvars.json
+settings.yaml

@@ -9,16 +9,17 @@ It does **not** modify this account unless you run it with this account's OCI pr
 1. Install and authenticate the OCI CLI locally (`oci setup config`).
 2. Install Terraform >= 1.6.
 3. Clone this repo.
-4. Edit only [`settings.yaml`](settings.yaml): tenancy/compartment OCID, region, VM size, and your SSH public key.
+4. Copy `settings.yaml.example` to `settings.yaml` and edit the tenancy/compartment OCID, region, and VM size.
+   Leave `ssh_public_key` empty to have the setup script generate a new Ed25519 key at the configured path.
 5. Run:
 
 ```bash
 ./setup.sh
 ```
 
-The script converts the YAML to a temporary ignored Terraform variable file, runs `init`,
-`validate`, `plan`, and `apply`, then removes the generated file. Review the plan before
-confirming `apply`.
+The script generates the SSH key when needed, converts the YAML to a temporary ignored Terraform
+variable file, runs `init`, `validate`, `plan`, and `apply`, then removes the generated file. Review
+the plan before confirming `apply`; keep the generated private key safe.
 
 ## What it creates and installs
 

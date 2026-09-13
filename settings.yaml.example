@@ -1,0 +1,11 @@
+# Copy to settings.yaml. setup.sh generates the SSH key when ssh_public_key is empty.
+region: ap-mumbai-1
+oci_profile: DEFAULT
+tenancy_ocid: ocid1.tenancy.oc1..REPLACE_WITH_YOUR_TENANCY
+compartment_ocid: "" # empty means tenancy
+ssh_public_key: ""
+ssh_private_key_path: ~/.ssh/oci-agent-vm_ed25519
+instance_name: personal-agent
+instance_ocpus: 1
+instance_memory_gb: 6
+enable_provisioning: true
