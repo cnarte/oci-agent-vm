@@ -4,16 +4,14 @@ This document is for commands run **inside the provisioned VM** over SSH. Do not
 commands on the local workstation. The local entrypoint is the repository root `./setup.sh`.
 Terraform uploads `cloud-init.yaml`, which runs automatically inside the VM.
 
-## 1. Shell and runtime
+## 1. Runtime
+
+Cloud-init installs Bash, Git, curl, Node.js, and npm. No shell startup file needs to be
+modified; use `~/.bashrc` only for optional interactive aliases or PATH additions.
 
 ```bash
-sudo apt-get update
-sudo apt-get install -y zsh git curl jq nodejs npm
-chsh -s /usr/bin/zsh "$USER"
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
-
-Log out/in once so the new zsh login shell is active.
 
 ## 2. Agent tools
 

@@ -45,7 +45,7 @@ the plan before confirming `apply`; keep the generated private key safe.
 Terraform creates a VCN, internet gateway, route table, public subnet, and ARM64
 `VM.Standard.A1.Flex` instance. Cloud-init installs:
 
-- zsh, XFCE, TigerVNC, noVNC, and websockify
+- Bash, XFCE, TigerVNC, noVNC, and websockify
 - official Google Chrome for Linux ARM64
 - persistent Chrome profile and loopback CDP on port 9222
 - uv, Agent Reach, pi, and cc-connect

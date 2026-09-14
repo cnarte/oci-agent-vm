@@ -4,7 +4,6 @@
 # Credentials are intentionally not embedded.
 package_update: true
 packages:
-  - zsh
   - git
   - curl
   - wget
@@ -51,7 +50,6 @@ write_files:
 
 runcmd:
   - [ bash, -lc, 'install -d -o ubuntu -g ubuntu -m 700 /home/ubuntu/.vnc /home/ubuntu/.config/remote-desktop /home/ubuntu/.config/chrome-agent-profile' ]
-  - [ bash, -lc, 'chsh -s /usr/bin/zsh ubuntu' ]
   - [ bash, -lc, 'curl -LsSf https://astral.sh/uv/install.sh | su - ubuntu -c "sh"' ]
   - [ bash, -lc, 'curl -fsSL https://dl.google.com/linux/direct/google-chrome-stable_current_arm64.deb -o /tmp/google-chrome.deb && apt-get install -y /tmp/google-chrome.deb' ]
   - [ bash, -lc, 'su - ubuntu -c "export PATH=\$HOME/.local/bin:\$PATH; uv tool install yt-dlp; uv tool install \"agent-reach[all] @ https://github.com/Panniantong/agent-reach/archive/main.zip\""' ]
