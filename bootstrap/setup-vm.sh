@@ -10,17 +10,21 @@ fi
 
 TARGET_USER=${TARGET_USER:-ubuntu}
 TARGET_HOME=$(getent passwd "$TARGET_USER" | cut -d: -f6)
+SCRIPT_DIR=$(cd -- "$(dirname -- "$0")" && pwd)
 INSTALL_GIT=${INSTALL_GIT:-true}
 export DEBIAN_FRONTEND=noninteractive
 
 apt-get update
-packages=(ca-certificates curl wget jq openssl nodejs npm dbus-x11 xfce4 tigervnc-standalone-server novnc websockify)
+packages=(ca-certificates curl wget jq openssl dbus-x11 xfce4 tigervnc-standalone-server novnc websockify)
 if [ "$INSTALL_GIT" = "true" ]; then packages+=(git); fi
 apt-get install -y "${packages[@]}"
 
 install -d -o "$TARGET_USER" -g "$TARGET_USER" -m 700 \
   "$TARGET_HOME/.vnc" "$TARGET_HOME/.config/remote-desktop" \
   "$TARGET_HOME/.config/chrome-agent-profile" "$TARGET_HOME/.hermes"
+if [ -f "$SCRIPT_DIR/configure-telegram.py" ]; then
+  install -o root -g root -m 0755 "$SCRIPT_DIR/configure-telegram.py" /usr/local/sbin/configure-agent-telegram.py
+fi
 
 # Official Google Chrome ARM64 package.
 curl -fsSL https://dl.google.com/linux/direct/google-chrome-stable_current_arm64.deb -o /tmp/google-chrome.deb
@@ -32,7 +36,11 @@ runuser -u "$TARGET_USER" -- env HOME="$TARGET_HOME" bash -lc \
   'curl -LsSf https://astral.sh/uv/install.sh | sh'
 runuser -u "$TARGET_USER" -- env HOME="$TARGET_HOME" bash -lc \
   'export PATH="$HOME/.local/bin:$PATH"; uv tool install yt-dlp; uv tool install "agent-reach[all] @ https://github.com/Panniantong/agent-reach/archive/main.zip"'
-npm install -g @earendil-works/pi-coding-agent cc-connect agent-browser
+runuser -u "$TARGET_USER" -- env HOME="$TARGET_HOME" bash -lc \
+  'curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash -s -- --non-interactive'
+runuser -u "$TARGET_USER" -- env HOME="$TARGET_HOME" bash -lc \
+  'export PATH="$HOME/.local/bin:$HOME/.hermes/node/bin:$PATH"; npm install -g @earendil-works/pi-coding-agent cc-connect agent-browser'
+curl -fsSL https://tailscale.com/install.sh | sh
 
 cat > "$TARGET_HOME/.vnc/xstartup" <<'EOF'
 #!/bin/sh
@@ -45,7 +53,6 @@ cat > "$TARGET_HOME/.config/remote-desktop/start-chrome.sh" <<'EOF'
 #!/bin/sh
 export DISPLAY=:1
 export XAUTHORITY="$HOME/.Xauthority"
-export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/1000/bus"
 exec /usr/bin/google-chrome --display=:1 \
   --remote-debugging-address=127.0.0.1 --remote-debugging-port=9222 \
   --password-store=basic --user-data-dir="$HOME/.config/chrome-agent-profile" \
@@ -55,7 +62,7 @@ chown "$TARGET_USER:$TARGET_USER" "$TARGET_HOME/.vnc/xstartup" "$TARGET_HOME/.co
 chmod 700 "$TARGET_HOME/.vnc/xstartup" "$TARGET_HOME/.config/remote-desktop/start-chrome.sh"
 
 if [ ! -f "$TARGET_HOME/.vnc/passwd" ]; then
-  pw=$(openssl rand -base64 24 | tr -dc A-Za-z0-9 | head -c 16)
+  pw=$(openssl rand -hex 8)
   printf '%s' "$pw" | vncpasswd -f > "$TARGET_HOME/.vnc/passwd"
   printf '%s\n' "$pw" > "$TARGET_HOME/.config/remote-desktop/vnc-password.txt"
   chown "$TARGET_USER:$TARGET_USER" "$TARGET_HOME/.vnc/passwd" "$TARGET_HOME/.config/remote-desktop/vnc-password.txt"
@@ -72,7 +79,7 @@ Type=forking
 User=$TARGET_USER
 Environment=HOME=$TARGET_HOME
 ExecStart=/usr/bin/vncserver :1 -localhost yes -geometry 1440x900 -depth 24
-ExecStop=/usr/bin/vncserver -kill :1
+ExecStop=/usr/sbin/runuser -u $TARGET_USER -- env HOME=$TARGET_HOME /usr/bin/vncserver -kill :1
 Restart=on-failure
 
 [Install]
@@ -102,7 +109,6 @@ User=$TARGET_USER
 Environment=HOME=$TARGET_HOME
 Environment=DISPLAY=:1
 Environment=XAUTHORITY=$TARGET_HOME/.Xauthority
-Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
 ExecStart=$TARGET_HOME/.config/remote-desktop/start-chrome.sh
 Restart=on-failure
 
@@ -127,5 +133,5 @@ VM setup complete.
 Chrome profile: $TARGET_HOME/.config/chrome-agent-profile
 VNC password:   $TARGET_HOME/.config/remote-desktop/vnc-password.txt
 Next: sudo tailscale up
-Then: tailscale serve --bg 6080
+Then: sudo tailscale serve --bg 6080
 EOF

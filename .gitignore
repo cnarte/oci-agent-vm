@@ -7,3 +7,5 @@ terraform/terraform.tfvars
 .env
 terraform/settings.auto.tfvars.json
 settings.yaml
+__pycache__/
+*.pyc

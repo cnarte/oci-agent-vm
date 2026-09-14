@@ -41,9 +41,9 @@ variable "enable_provisioning" {
 }
 
 variable "availability_domain" {
-  description = "OCI availability domain for a new instance."
+  description = "OCI availability domain for a new instance. Leave empty to use the first AD in the selected region."
   type        = string
-  default     = "BDKv:AP-MUMBAI-1-AD-1"
+  default     = ""
 }
 
 variable "compartment_ocid" {

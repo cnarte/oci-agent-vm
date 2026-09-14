@@ -2,6 +2,8 @@
 # VM ONLY: this file is uploaded as OCI user_data and runs inside the new VM.
 # Do not run it on the local workstation. Local orchestration lives in ../setup.sh.
 # Credentials are intentionally not embedded.
+bootcmd:
+  - [ bash, -lc, 'install -d -o ubuntu -g ubuntu -m 700 /home/ubuntu/.vnc /home/ubuntu/.config/remote-desktop /home/ubuntu/.config/chrome-agent-profile /home/ubuntu/.hermes' ]
 package_update: true
 packages:
 %{ if install_git }
@@ -17,8 +19,6 @@ packages:
   - tigervnc-standalone-server
   - novnc
   - websockify
-  - nodejs
-  - npm
 
 write_files:
   - path: /home/ubuntu/.vnc/xstartup
@@ -44,24 +44,79 @@ write_files:
       #!/bin/sh
       export DISPLAY=:1
       export XAUTHORITY=/home/ubuntu/.Xauthority
-      export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
-      exec /usr/bin/google-chrome --no-sandbox --display=:1 \
+      exec /usr/bin/google-chrome --display=:1 \
         --remote-debugging-address=127.0.0.1 --remote-debugging-port=9222 \
         --password-store=basic --user-data-dir=/home/ubuntu/.config/chrome-agent-profile \
         --no-first-run --no-default-browser-check about:blank
+  - path: /etc/systemd/system/agent-vnc.service
+    owner: root:root
+    permissions: '0644'
+    content: |
+      [Unit]
+      Description=Private VNC desktop for the agent VM
+      After=network.target
+
+      [Service]
+      Type=forking
+      User=ubuntu
+      Environment=HOME=/home/ubuntu
+      ExecStart=/usr/bin/vncserver :1 -localhost yes -geometry 1440x900 -depth 24
+      ExecStop=/usr/sbin/runuser -u ubuntu -- env HOME=/home/ubuntu /usr/bin/vncserver -kill :1
+      Restart=on-failure
+
+      [Install]
+      WantedBy=multi-user.target
+  - path: /etc/systemd/system/agent-novnc.service
+    owner: root:root
+    permissions: '0644'
+    content: |
+      [Unit]
+      Description=Loopback-only noVNC bridge
+      After=agent-vnc.service
+      Requires=agent-vnc.service
+
+      [Service]
+      ExecStart=/usr/bin/websockify --web=/usr/share/novnc --heartbeat=30 127.0.0.1:6080 127.0.0.1:5901
+      Restart=on-failure
+
+      [Install]
+      WantedBy=multi-user.target
+  - path: /etc/systemd/system/agent-chrome.service
+    owner: root:root
+    permissions: '0644'
+    content: |
+      [Unit]
+      Description=Persistent Google Chrome for the agent
+      After=agent-vnc.service
+      Requires=agent-vnc.service
+
+      [Service]
+      User=ubuntu
+      Environment=HOME=/home/ubuntu
+      Environment=DISPLAY=:1
+      Environment=XAUTHORITY=/home/ubuntu/.Xauthority
+      ExecStart=/home/ubuntu/.config/remote-desktop/start-chrome.sh
+      Restart=on-failure
+
+      [Install]
+      WantedBy=multi-user.target
+  - path: /usr/local/sbin/configure-agent-telegram.py
+    owner: root:root
+    permissions: '0755'
+    content: |
+      ${indent(6, configure_telegram_script)}
 
 runcmd:
   - [ bash, -lc, 'install -d -o ubuntu -g ubuntu -m 700 /home/ubuntu/.vnc /home/ubuntu/.config/remote-desktop /home/ubuntu/.config/chrome-agent-profile' ]
   - [ bash, -lc, 'curl -LsSf https://astral.sh/uv/install.sh | su - ubuntu -c "sh"' ]
   - [ bash, -lc, 'curl -fsSL https://dl.google.com/linux/direct/google-chrome-stable_current_arm64.deb -o /tmp/google-chrome.deb && apt-get install -y /tmp/google-chrome.deb' ]
   - [ bash, -lc, 'su - ubuntu -c "export PATH=\$HOME/.local/bin:\$PATH; uv tool install yt-dlp; uv tool install \"agent-reach[all] @ https://github.com/Panniantong/agent-reach/archive/main.zip\""' ]
-  - [ bash, -lc, 'npm install -g @earendil-works/pi-coding-agent cc-connect agent-browser' ]
+  - [ bash, -lc, 'su - ubuntu -c "curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash -s -- --non-interactive"' ]
+  - [ bash, -lc, 'su - ubuntu -c "export PATH=\$HOME/.local/bin:\$HOME/.hermes/node/bin:\$PATH; npm install -g @earendil-works/pi-coding-agent cc-connect agent-browser"' ]
   - [ bash, -lc, 'su - ubuntu -c "export PATH=\$HOME/.local/bin:\$PATH; mkdir -p \$HOME/.hermes; cp /opt/telegram.env.example \$HOME/.hermes/.env.example; chmod 600 \$HOME/.hermes/.env.example"' ]
   - [ bash, -lc, 'curl -fsSL https://tailscale.com/install.sh | sh' ]
-  - [ bash, -lc, 'install -d -o ubuntu -g ubuntu -m 700 /home/ubuntu/.config/remote-desktop; pw=$(openssl rand -base64 24 | tr -dc A-Za-z0-9 | head -c 16); printf "%s" "$pw" | vncpasswd -f > /home/ubuntu/.vnc/passwd; printf "%s\n" "$pw" > /home/ubuntu/.config/remote-desktop/vnc-password.txt; chown ubuntu:ubuntu /home/ubuntu/.vnc/passwd /home/ubuntu/.config/remote-desktop/vnc-password.txt; chmod 600 /home/ubuntu/.vnc/passwd /home/ubuntu/.config/remote-desktop/vnc-password.txt' ]
-  - [ bash, -lc, 'su - ubuntu -c "vncserver :1 -localhost yes -geometry 1440x900 -depth 24"' ]
-  - [ bash, -lc, 'nohup websockify --web=/usr/share/novnc --heartbeat=30 127.0.0.1:6080 127.0.0.1:5901 >/home/ubuntu/.config/remote-desktop/novnc.log 2>&1 &' ]
-  - [ bash, -lc, 'su - ubuntu -c "nohup /home/ubuntu/.config/remote-desktop/start-chrome.sh >/home/ubuntu/.config/remote-desktop/chrome.log 2>&1 &"' ]
+  - [ bash, -lc, 'pw=$(openssl rand -hex 8); printf "%s" "$pw" | vncpasswd -f > /home/ubuntu/.vnc/passwd; printf "%s\n" "$pw" > /home/ubuntu/.config/remote-desktop/vnc-password.txt; chown ubuntu:ubuntu /home/ubuntu/.vnc/passwd /home/ubuntu/.config/remote-desktop/vnc-password.txt; chmod 600 /home/ubuntu/.vnc/passwd /home/ubuntu/.config/remote-desktop/vnc-password.txt' ]
+  - [ bash, -lc, 'systemctl daemon-reload && systemctl enable --now agent-vnc.service agent-novnc.service agent-chrome.service' ]
 
 # Manual, credentialed steps after first boot:
 #   sudo tailscale up

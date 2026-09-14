@@ -1,4 +1,4 @@
-# Optional full provisioning example. It is disabled by default so the first plan is read-only.
+# Full provisioning. Set enable_provisioning=false for read-only discovery.
 
 locals {
   provision_compartment = var.compartment_ocid != "" ? var.compartment_ocid : var.tenancy_ocid
@@ -77,7 +77,7 @@ resource "oci_core_subnet" "agent" {
 resource "oci_core_instance" "agent" {
   count               = var.enable_provisioning ? 1 : 0
   compartment_id      = local.provision_compartment
-  availability_domain = var.availability_domain
+  availability_domain = local.selected_availability_domain
   display_name        = var.instance_name
   shape               = "VM.Standard.A1.Flex"
   shape_config {
@@ -100,7 +100,8 @@ resource "oci_core_instance" "agent" {
   metadata = {
     ssh_authorized_keys = var.ssh_public_key
     user_data = base64encode(templatefile("${path.module}/../bootstrap/cloud-init.yaml", {
-      install_git = var.install_git
+      install_git               = var.install_git
+      configure_telegram_script = file("${path.module}/../bootstrap/configure-telegram.py")
     }))
   }
 }

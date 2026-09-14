@@ -6,14 +6,19 @@ Terraform uploads `cloud-init.yaml`, which runs automatically inside the VM.
 
 ## 1. Runtime
 
-Cloud-init installs Bash, Git, curl, Node.js, and npm. No shell startup file needs to be
-modified; use `~/.bashrc` only for optional interactive aliases or PATH additions.
+Cloud-init installs Bash and curl plus the desktop/browser dependencies. Git is optional at the
+base layer, and the official Hermes installer may install it for its managed checkout. No shell
+startup file needs to be modified; use `~/.bashrc` only for optional interactive aliases or PATH
+additions.
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
 ## 2. Agent tools
+
+The bootstrap installs Hermes Agent with its official installer, plus pi, cc-connect, and
+Agent Reach. If a manual re-run is needed, use `bootstrap/setup-vm.sh` as root.
 
 ```bash
 export PATH="$HOME/.local/bin:$PATH"
@@ -30,18 +35,30 @@ agent-browser --version
 agent-reach --version
 ```
 
-## 3. Telegram placeholders
+## 3. Telegram
+
+The local setup scripts can transfer populated Telegram settings once over SSH after cloud-init.
+For a manual VM setup, configure the installed helper or edit the agent configuration directly:
+
+Use an interactive prompt so tokens are not placed in shell arguments or history:
 
 ```bash
-mkdir -p ~/.hermes
-cp telegram.env.example ~/.hermes/.env
-chmod 600 ~/.hermes/.env
-$EDITOR ~/.hermes/.env
+python3 - <<'PY'
+import getpass, json, subprocess
+
+payload = {
+    "hermes_bot_token": getpass.getpass("Hermes bot token (blank to skip): "),
+    "cc_connect_bot_token": getpass.getpass("cc-connect bot token (blank to skip): "),
+    "allowed_users": [x.strip() for x in input("Allowed numeric Telegram user IDs (comma-separated): ").split(",") if x.strip()],
+}
+subprocess.run(["python3", "/usr/local/sbin/configure-agent-telegram.py"],
+               input=json.dumps(payload), text=True, check=True)
+PY
 ```
 
-Create the bot token with Telegram `@BotFather`. Restrict access with
-`TELEGRAM_ALLOWED_USERS` using numeric Telegram user IDs. Do not put tokens in Terraform,
-cloud-init, Git, or chat logs.
+The helper expects `hermes_bot_token`, `cc_connect_bot_token`, and a non-empty numeric
+`allowed_users` array as JSON. Create bot tokens with Telegram `@BotFather`. Do not put tokens in
+Terraform, cloud-init, Git, or chat logs.
 
 ## 4. Chrome/CDP
 

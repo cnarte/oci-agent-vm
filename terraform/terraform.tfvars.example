@@ -3,4 +3,5 @@ oci_profile    = "DEFAULT"
 tenancy_ocid   = "ocid1.tenancy.oc1..REPLACE_ME"
 vcn_id         = "ocid1.vcn.oc1.ap-mumbai-1.REPLACE_ME"
 subnet_id      = "ocid1.subnet.oc1.ap-mumbai-1.REPLACE_ME"
-instance_id    = "ocid1.instance.oc1.ap-mumbai-1.REPLACE_ME"
+instance_id         = "ocid1.instance.oc1.ap-mumbai-1.REPLACE_ME"
+enable_provisioning = false
