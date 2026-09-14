@@ -15,7 +15,6 @@ Hermes Agent, pi, cc-connect, Agent Reach, VNC/noVNC, and Tailscale.
 - [Recommended path: one YAML file](#recommended-path-one-yaml-file)
   - [Linux and macOS](#linux-and-macos)
   - [Windows](#windows)
-- [Telegram setup](#telegram-setup)
 - [After provisioning](#after-provisioning)
 - [Manual VM path](#manual-vm-path)
 - [Configuration reference](#configuration-reference)
@@ -69,6 +68,38 @@ Tailscale Serve or an SSH tunnel.
 - Python 3 and PyYAML
 - OpenSSH client and `ssh-keygen`
 - `unzip` when using a ZIP download
+
+### Telegram credentials (optional)
+
+Telegram setup is optional. Use separate bots for Hermes and cc-connect so they do not compete
+for the same update stream.
+
+#### Create the bots
+
+For each agent:
+
+1. Open Telegram and message [`@BotFather`](https://t.me/BotFather).
+2. Send `/newbot`.
+3. Choose a display name and a username ending in `bot`.
+4. Copy the token into the matching field in `settings.yaml`.
+
+#### Find allowed users
+
+1. Message [`@userinfobot`](https://t.me/userinfobot).
+2. Send `/start`.
+3. Copy your numeric user ID into `allowed_users`:
+
+```yaml
+telegram:
+  hermes_bot_token: ""
+  cc_connect_bot_token: ""
+  allowed_users:
+    - 123456789
+```
+
+If a token is empty, that agent's Telegram integration is skipped. If a token is present but
+`allowed_users` is empty, do not enable that integration; add at least one numeric ID first.
+Never commit the populated `settings.yaml`.
 
 Terraform and OCI CLI run on the **local workstation**. The VM does not need Terraform or the
 OCI CLI.
@@ -158,38 +189,6 @@ Set-ExecutionPolicy -Scope Process Bypass
 
 `setup.ps1` performs the same local workflow as `setup.sh` and generates the SSH key with
 Windows OpenSSH. No Linux commands are run on Windows.
-
-## Telegram setup
-
-Telegram is optional. Use separate bots for Hermes and cc-connect so they do not compete for the
-same update stream.
-
-### Create a bot
-
-For each agent:
-
-1. Open Telegram and message [`@BotFather`](https://t.me/BotFather).
-2. Send `/newbot`.
-3. Choose a display name and a username ending in `bot`.
-4. Copy the token returned by BotFather into the matching field in `settings.yaml`.
-
-### Find allowed users
-
-1. Message [`@userinfobot`](https://t.me/userinfobot).
-2. Send `/start`.
-3. Copy your numeric user ID into `allowed_users`:
-
-```yaml
-telegram:
-  hermes_bot_token: "..."
-  cc_connect_bot_token: "..."
-  allowed_users:
-    - 123456789
-```
-
-If a token is empty, that agent's Telegram integration is skipped. If a token is present but
-`allowed_users` is empty, do not enable the integration; add at least one numeric ID first.
-Never commit the populated settings file.
 
 ## After provisioning
 
