@@ -10,11 +10,13 @@ fi
 
 TARGET_USER=${TARGET_USER:-ubuntu}
 TARGET_HOME=$(getent passwd "$TARGET_USER" | cut -d: -f6)
+INSTALL_GIT=${INSTALL_GIT:-true}
 export DEBIAN_FRONTEND=noninteractive
 
 apt-get update
-apt-get install -y ca-certificates curl wget git jq openssl nodejs npm \
-  dbus-x11 xfce4 tigervnc-standalone-server novnc websockify
+packages=(ca-certificates curl wget jq openssl nodejs npm dbus-x11 xfce4 tigervnc-standalone-server novnc websockify)
+if [ "$INSTALL_GIT" = "true" ]; then packages+=(git); fi
+apt-get install -y "${packages[@]}"
 
 install -d -o "$TARGET_USER" -g "$TARGET_USER" -m 700 \
   "$TARGET_HOME/.vnc" "$TARGET_HOME/.config/remote-desktop" \

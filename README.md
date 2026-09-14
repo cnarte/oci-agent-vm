@@ -12,6 +12,7 @@ It does **not** modify this account unless you run it with this account's OCI pr
 - [Install Terraform](https://developer.hashicorp.com/terraform/install) (version 1.6 or newer)
 - [Install Git](https://git-scm.com/downloads)
 - Python 3 and PyYAML
+- unzip (only needed when downloading the repository as a ZIP)
 
 ## Two execution contexts
 
@@ -31,8 +32,14 @@ Do not run cloud-init or VM setup commands on the local workstation.
 1. Install and authenticate the OCI CLI locally (`oci setup config`).
 2. Install Terraform >= 1.6.
 3. Install Python 3 and PyYAML (`python3 -m pip install --user pyyaml`).
-4. Clone this repo.
+4. Clone this repo, or download the ZIP if Git is unavailable:
+   ```bash
+   curl -L https://github.com/cnarte/oci-agent-vm/archive/refs/heads/main.zip -o agent-vm.zip
+   unzip agent-vm.zip
+   cd oci-agent-vm-main
+   ```
 5. Copy `settings.yaml.example` to `settings.yaml` and edit the tenancy/compartment OCID, region, and VM size.
+   Leave `ssh_public_key` empty to let the setup script generate the key.
 6. Set `ssh_ingress_cidr` in `settings.yaml` to your public IP with `/32` when possible.
    The example uses `0.0.0.0/0` only as a compatibility default; narrowing it is strongly recommended.
 7. Create an SSH key, or let the setup script create one:
@@ -41,7 +48,7 @@ Do not run cloud-init or VM setup commands on the local workstation.
    ```
    Keep the private key safe. Only the `.pub` key is installed on the VM. If you skip this step,
    `setup.sh` generates the key automatically.
-Leave `ssh_public_key` empty to use the generated key, or paste the contents of your `.pub` file.
+Or paste the contents of your `.pub` file into `ssh_public_key`.
 8. Run:
 
 ```bash
@@ -64,7 +71,8 @@ Set-ExecutionPolicy -Scope Process Bypass
 ```
 
 `setup.ps1` generates the SSH key with Windows OpenSSH and performs the same local Terraform
-workflow as `setup.sh`. `bootstrap/cloud-init.yaml` still runs only inside the Linux VM.
+workflow as `setup.sh`. If Git is unavailable, download the ZIP with `Invoke-WebRequest` and
+extract it with `Expand-Archive`. `bootstrap/cloud-init.yaml` still runs only inside the Linux VM.
 
 The script generates the SSH key when needed, converts the YAML to a temporary ignored Terraform
 variable file, runs `init`, `validate`, `plan`, and `apply`, then removes the generated file. Review
@@ -73,7 +81,16 @@ the plan before confirming `apply`; keep the generated private key safe.
 ## Manual VM alternative
 
 If you do not want Terraform to create the VM, create an Ubuntu 22.04 ARM64 instance manually
-in the OCI console. Allow SSH only from your workstation IP, then copy this repository to the VM:
+in the OCI console. Allow SSH only from your workstation IP, then copy this repository to the VM.
+Git is not required on the VM. Download only the VM installer directly:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/cnarte/oci-agent-vm/main/bootstrap/setup-vm.sh -o /tmp/setup-vm.sh
+chmod +x /tmp/setup-vm.sh
+sudo INSTALL_GIT=false bash /tmp/setup-vm.sh
+```
+
+Or copy the bootstrap directory from a downloaded ZIP:
 
 ```bash
 scp -i ~/.ssh/oci-agent-vm_ed25519 -r bootstrap ubuntu@<PUBLIC_IP>:/home/ubuntu/
@@ -94,7 +111,7 @@ tailscale serve --bg 6080
 Terraform creates a VCN, internet gateway, route table, public subnet, and ARM64
 `VM.Standard.A1.Flex` instance. Cloud-init installs:
 
-- Bash, XFCE, TigerVNC, noVNC, and websockify
+- Bash, XFCE, TigerVNC, noVNC, and websockify (set `install_git: false` to skip Git)
 - official Google Chrome for Linux ARM64
 - persistent Chrome profile and loopback CDP on port 9222
 - uv, Agent Reach, pi, and cc-connect

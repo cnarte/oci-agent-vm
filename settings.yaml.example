@@ -9,6 +9,7 @@ instance_name: personal-agent
 instance_ocpus: 1
 instance_memory_gb: 6
 ssh_ingress_cidr: 0.0.0.0/0 # replace with your public-IP/32 when possible
+install_git: true # set false for a smaller VM if Git is not needed
 telegram:
   hermes_bot_token: ""
   cc_connect_bot_token: ""

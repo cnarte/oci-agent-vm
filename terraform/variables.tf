@@ -78,3 +78,9 @@ variable "ssh_ingress_cidr" {
   type        = string
   default     = "0.0.0.0/0"
 }
+
+variable "install_git" {
+  description = "Install Git in the VM image. Disable for a smaller VM when Git is not needed."
+  type        = bool
+  default     = true
+}

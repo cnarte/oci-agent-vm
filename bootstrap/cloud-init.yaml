@@ -4,7 +4,9 @@
 # Credentials are intentionally not embedded.
 package_update: true
 packages:
+%{ if install_git }
   - git
+%{ endif }
   - curl
   - wget
   - jq

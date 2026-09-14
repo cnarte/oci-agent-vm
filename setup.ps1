@@ -44,7 +44,7 @@ $Allowed = @(
     'region', 'oci_profile', 'tenancy_ocid', 'vcn_id', 'subnet_id',
     'instance_id', 'enable_provisioning', 'availability_domain',
     'compartment_ocid', 'ssh_public_key', 'instance_name',
-    'instance_ocpus', 'instance_memory_gb', 'ssh_ingress_cidr'
+    'instance_ocpus', 'instance_memory_gb', 'ssh_ingress_cidr', 'install_git'
 )
 $Tfvars = @{}
 foreach ($Name in $Allowed) {

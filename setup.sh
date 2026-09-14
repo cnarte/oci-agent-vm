@@ -39,7 +39,7 @@ allowed = {
     'region', 'oci_profile', 'tenancy_ocid', 'vcn_id', 'subnet_id',
     'instance_id', 'enable_provisioning', 'availability_domain',
     'compartment_ocid', 'ssh_public_key', 'instance_name',
-    'instance_ocpus', 'instance_memory_gb', 'ssh_ingress_cidr',
+    'instance_ocpus', 'instance_memory_gb', 'ssh_ingress_cidr', 'install_git',
 }
 data = {k: v for k, v in data.items() if k in allowed}
 data['ssh_public_key'] = os.environ['SSH_PUBLIC'].strip()
