@@ -1,4 +1,4 @@
-# Personal Browser Agent VM for OCI
+# Personal Browser Agent VM with Harness setup
 
 Provision a personal Linux browser-agent workstation on Oracle Cloud Infrastructure (OCI).
 Terraform creates the network and ARM64 VM; cloud-init installs the desktop, Google Chrome,
