@@ -1,138 +1,338 @@
-# Personal Browser + Hermes Agent VM on OCI
+# Personal Browser Agent VM for OCI
 
-This repo creates a fresh ARM64 Ubuntu VM for a personal browser agent and Hermes Agent.
-Terraform provisions the OCI network and VM; cloud-init installs the complete software stack.
-It does **not** modify this account unless you run it with this account's OCI profile.
+Provision a personal Linux browser-agent workstation on Oracle Cloud Infrastructure (OCI).
+Terraform creates the network and ARM64 VM; cloud-init installs the desktop, Google Chrome,
+Hermes Agent, pi, cc-connect, Agent Reach, VNC/noVNC, and Tailscale.
+
+> **Safety:** This repository creates billable cloud resources. Read the plan before approving
+> `terraform apply`. Never commit `settings.yaml`, Terraform state, Telegram tokens, SSH private
+> keys, Tailscale keys, or browser profiles.
+
+## Table of contents
+
+- [What you get](#what-you-get)
+- [Prerequisites](#prerequisites)
+- [Recommended path: one YAML file](#recommended-path-one-yaml-file)
+  - [Linux and macOS](#linux-and-macos)
+  - [Windows](#windows)
+- [Telegram setup](#telegram-setup)
+- [After provisioning](#after-provisioning)
+- [Manual VM path](#manual-vm-path)
+- [Configuration reference](#configuration-reference)
+- [Validation and cleanup](#validation-and-cleanup)
+- [Security notes](#security-notes)
+- [Troubleshooting](#troubleshooting)
+
+## What you get
+
+### OCI resources
+
+- VCN (`10.0.0.0/16`)
+- Public subnet (`10.0.1.0/24`)
+- Internet gateway and route table
+- Dedicated security list
+- ARM64 `VM.Standard.A1.Flex` instance
+- Public IP for initial SSH access
+
+### VM software
+
+- Ubuntu ARM64
+- Bash and optional Git
+- XFCE desktop
+- TigerVNC + noVNC through loopback-only listeners
+- Official Google Chrome for Linux ARM64
+- Persistent Chrome profile at `~/.config/chrome-agent-profile`
+- Chrome DevTools Protocol on `127.0.0.1:9222`
+- uv, pi, Hermes Agent, cc-connect, and Agent Reach
+- Tailscale
+
+VNC, noVNC, and CDP are not opened in OCI security rules. Remote desktop access should use
+Tailscale Serve or an SSH tunnel.
 
 ## Prerequisites
 
-- [Create an Oracle Cloud account](https://www.oracle.com/cloud/free/)
-- [Install the OCI CLI](https://docs.oracle.com/en-us/iaas/Content/API/SDKDocs/cliinstall.htm)
-- [Configure the OCI CLI](https://docs.oracle.com/en-us/iaas/Content/API/SDKDocs/cliconfigure.htm)
-- [Install Terraform](https://developer.hashicorp.com/terraform/install) (version 1.6 or newer)
-- [Install Git](https://git-scm.com/downloads)
+### Account and cloud access
+
+1. [Create an Oracle Cloud account](https://www.oracle.com/cloud/free/).
+2. Install the [OCI CLI](https://docs.oracle.com/en-us/iaas/Content/API/SDKDocs/cliinstall.htm).
+3. Configure it with [`oci setup config`](https://docs.oracle.com/en-us/iaas/Content/API/SDKDocs/cliconfigure.htm).
+4. Verify the selected profile:
+
+   ```bash
+   oci iam region-subscription list
+   ```
+
+### Local tools
+
+- [Terraform >= 1.6](https://developer.hashicorp.com/terraform/install)
+- [Git](https://git-scm.com/downloads), or a ZIP download instead
 - Python 3 and PyYAML
-- unzip (only needed when downloading the repository as a ZIP)
+- OpenSSH client and `ssh-keygen`
+- `unzip` when using a ZIP download
 
-## Two execution contexts
+Terraform and OCI CLI run on the **local workstation**. The VM does not need Terraform or the
+OCI CLI.
 
-There are deliberately two separate contexts:
+## Recommended path: one YAML file
 
-- **Local workstation:** run only the root `./setup.sh`. It uses your OCI CLI credentials,
-  generates the SSH key, and runs Terraform.
-- **Provisioned VM:** `bootstrap/cloud-init.yaml` is uploaded as OCI user-data and runs inside
-  the VM. It installs the browser/agent stack. Commands in `bootstrap/SETUP.md` are VM-only.
+Fork this repository first, then use your fork so your settings and future changes remain yours.
 
-Do not run cloud-init or VM setup commands on the local workstation.
+### Linux and macOS
 
-## One-file setup path
+```bash
+git clone https://github.com/YOUR_USERNAME/oci-agent-vm.git
+cd oci-agent-vm
+python3 -m pip install --user pyyaml
+cp settings.yaml.example settings.yaml
+```
 
-### Linux/macOS workstation
+If Git is unavailable:
 
-1. Install and authenticate the OCI CLI locally (`oci setup config`).
-2. Install Terraform >= 1.6.
-3. Install Python 3 and PyYAML (`python3 -m pip install --user pyyaml`).
-4. Clone this repo, or download the ZIP if Git is unavailable:
-   ```bash
-   curl -L https://github.com/cnarte/oci-agent-vm/archive/refs/heads/main.zip -o agent-vm.zip
-   unzip agent-vm.zip
-   cd oci-agent-vm-main
-   ```
-5. Copy `settings.yaml.example` to `settings.yaml` and edit the tenancy/compartment OCID, region, and VM size.
-   Leave `ssh_public_key` empty to let the setup script generate the key.
-6. Set `ssh_ingress_cidr` in `settings.yaml` to your public IP with `/32` when possible.
-   The example uses `0.0.0.0/0` only as a compatibility default; narrowing it is strongly recommended.
-7. Create an SSH key, or let the setup script create one:
-   ```bash
-   ssh-keygen -t ed25519 -f ~/.ssh/oci-agent-vm_ed25519
-   ```
-   Keep the private key safe. Only the `.pub` key is installed on the VM. If you skip this step,
-   `setup.sh` generates the key automatically.
-Or paste the contents of your `.pub` file into `ssh_public_key`.
-8. Run:
+```bash
+curl -L https://github.com/YOUR_USERNAME/oci-agent-vm/archive/refs/heads/main.zip -o agent-vm.zip
+unzip agent-vm.zip
+cd oci-agent-vm-main
+python3 -m pip install --user pyyaml
+cp settings.yaml.example settings.yaml
+```
+
+Edit `settings.yaml`:
+
+```yaml
+region: ap-mumbai-1
+oci_profile: DEFAULT
+tenancy_ocid: ocid1.tenancy.oc1..YOUR_TENANCY
+compartment_ocid: ""
+ssh_public_key: ""
+ssh_private_key_path: ~/.ssh/oci-agent-vm_ed25519
+ssh_ingress_cidr: 203.0.113.10/32
+instance_name: personal-agent
+instance_ocpus: 1
+instance_memory_gb: 6
+install_git: true
+enable_provisioning: true
+
+telegram:
+  hermes_bot_token: ""
+  cc_connect_bot_token: ""
+  allowed_users: []
+```
+
+Leave `ssh_public_key` empty to let the script generate an Ed25519 key. The private key remains
+on your workstation; only its public half is sent to OCI.
+
+Run the local orchestrator:
 
 ```bash
 ./setup.sh
 ```
 
-### Windows workstation
+It checks prerequisites, creates the temporary Terraform variables file, initializes and validates
+Terraform, shows the plan, and asks Terraform to apply it. The temporary variables file is deleted
+when the script exits.
 
-Use PowerShell (not the VM bootstrap script). Install the [OCI CLI](https://docs.oracle.com/en-us/iaas/Content/API/SDKDocs/cliinstall.htm),
-[Terraform](https://developer.hashicorp.com/terraform/install),
-[Python](https://www.python.org/downloads/windows/), and Windows OpenSSH. Then:
+### Windows
+
+Use PowerShell on the local workstation. Do **not** run the VM bootstrap script locally.
+
+Install:
+
+- [OCI CLI for Windows](https://docs.oracle.com/en-us/iaas/Content/API/SDKDocs/cliinstall.htm)
+- [Terraform for Windows](https://developer.hashicorp.com/terraform/install)
+- [Python for Windows](https://www.python.org/downloads/windows/)
+- Windows OpenSSH client
+
+Then:
 
 ```powershell
 oci setup config
 python -m pip install --user pyyaml
+Invoke-WebRequest https://github.com/YOUR_USERNAME/oci-agent-vm/archive/refs/heads/main.zip -OutFile agent-vm.zip
+Expand-Archive agent-vm.zip -DestinationPath .
+Set-Location .\oci-agent-vm-main
 Copy-Item settings.yaml.example settings.yaml
 notepad settings.yaml
 Set-ExecutionPolicy -Scope Process Bypass
 .\setup.ps1
 ```
 
-`setup.ps1` generates the SSH key with Windows OpenSSH and performs the same local Terraform
-workflow as `setup.sh`. If Git is unavailable, download the ZIP with `Invoke-WebRequest` and
-extract it with `Expand-Archive`. `bootstrap/cloud-init.yaml` still runs only inside the Linux VM.
+`setup.ps1` performs the same local workflow as `setup.sh` and generates the SSH key with
+Windows OpenSSH. No Linux commands are run on Windows.
 
-The script generates the SSH key when needed, converts the YAML to a temporary ignored Terraform
-variable file, runs `init`, `validate`, `plan`, and `apply`, then removes the generated file. Review
-the plan before confirming `apply`; keep the generated private key safe.
+## Telegram setup
 
-## Manual VM alternative
+Telegram is optional. Use separate bots for Hermes and cc-connect so they do not compete for the
+same update stream.
 
-If you do not want Terraform to create the VM, create an Ubuntu 22.04 ARM64 instance manually
-in the OCI console. Allow SSH only from your workstation IP, then copy this repository to the VM.
-Git is not required on the VM. Download only the VM installer directly:
+### Create a bot
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/cnarte/oci-agent-vm/main/bootstrap/setup-vm.sh -o /tmp/setup-vm.sh
-chmod +x /tmp/setup-vm.sh
-sudo INSTALL_GIT=false bash /tmp/setup-vm.sh
+For each agent:
+
+1. Open Telegram and message [`@BotFather`](https://t.me/BotFather).
+2. Send `/newbot`.
+3. Choose a display name and a username ending in `bot`.
+4. Copy the token returned by BotFather into the matching field in `settings.yaml`.
+
+### Find allowed users
+
+1. Message [`@userinfobot`](https://t.me/userinfobot).
+2. Send `/start`.
+3. Copy your numeric user ID into `allowed_users`:
+
+```yaml
+telegram:
+  hermes_bot_token: "..."
+  cc_connect_bot_token: "..."
+  allowed_users:
+    - 123456789
 ```
 
-Or copy the bootstrap directory from a downloaded ZIP:
+If a token is empty, that agent's Telegram integration is skipped. If a token is present but
+`allowed_users` is empty, do not enable the integration; add at least one numeric ID first.
+Never commit the populated settings file.
+
+## After provisioning
+
+SSH into the VM using the generated key and the public IP printed by OCI:
 
 ```bash
-scp -i ~/.ssh/oci-agent-vm_ed25519 -r bootstrap ubuntu@<PUBLIC_IP>:/home/ubuntu/
-ssh -i ~/.ssh/oci-agent-vm_ed25519 ubuntu@<PUBLIC_IP>
-sudo bash bootstrap/setup-vm.sh
+ssh -i ~/.ssh/oci-agent-vm_ed25519 ubuntu@PUBLIC_IP
 ```
 
-`bootstrap/setup-vm.sh` is VM-only. It installs the same desktop, Chrome, agent, and browser
-stack as cloud-init and creates persistent services. Finish with:
+Cloud-init runs automatically. Check it with:
+
+```bash
+cloud-init status --wait
+systemctl status agent-vnc agent-novnc agent-chrome
+```
+
+Authenticate Tailscale:
 
 ```bash
 sudo tailscale up
-tailscale serve --bg 6080
 ```
 
-## What it creates and installs
-
-Terraform creates a VCN, internet gateway, route table, public subnet, and ARM64
-`VM.Standard.A1.Flex` instance. Cloud-init installs:
-
-- Bash, XFCE, TigerVNC, noVNC, and websockify (set `install_git: false` to skip Git)
-- official Google Chrome for Linux ARM64
-- persistent Chrome profile and loopback CDP on port 9222
-- uv, Agent Reach, pi, and cc-connect
-- Tailscale (authentication remains an explicit manual step)
-
-After first boot:
+Follow the displayed authentication URL, then publish noVNC to your tailnet only:
 
 ```bash
-sudo tailscale up
-cp ~/.hermes/.env.example ~/.hermes/.env
-$EDITOR ~/.hermes/.env                 # add TELEGRAM_BOT_TOKEN if desired
+sudo tailscale serve --bg 6080
+sudo tailscale serve status
+```
+
+Open the generated HTTPS tailnet URL in your local browser. The VNC password is stored at:
+
+```bash
+cat ~/.config/remote-desktop/vnc-password.txt
+```
+
+Log into websites through the visible Chrome window. Credentials and cookies remain in the VM's
+persistent Chrome profile.
+
+Configure Hermes to attach to that exact Chrome instance:
+
+```bash
 hermes config set browser.engine chrome
 hermes config set browser.cdp_url http://127.0.0.1:9222
 ```
 
-Use Tailscale Serve to publish noVNC to the tailnet only; never expose VNC or CDP directly
-through OCI security rules. Telegram tokens, Tailscale auth keys, OCI keys, SSH private keys,
-and Chrome profiles are intentionally not stored in this repository.
+## Manual VM path
 
-## Read-only discovery
+Terraform is optional. To create only the VM manually:
 
-To inspect an existing account without creating resources, set `enable_provisioning: false`
-in `settings.yaml` and provide existing `vcn_id`, `subnet_id`, and `instance_id` values in a
-local generated variable file, or run Terraform with those variables explicitly.
+1. Create an Ubuntu 22.04 ARM64 OCI instance.
+2. Add your SSH public key in the OCI console.
+3. Allow TCP/22 only from your workstation IP.
+4. SSH into the VM.
+5. Download and run the VM-only installer—no Git is required:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/YOUR_USERNAME/oci-agent-vm/main/bootstrap/setup-vm.sh \
+  -o /tmp/setup-vm.sh
+chmod +x /tmp/setup-vm.sh
+sudo INSTALL_GIT=false bash /tmp/setup-vm.sh
+```
+
+Or copy the `bootstrap` directory from a ZIP and run:
+
+```bash
+sudo INSTALL_GIT=false bash bootstrap/setup-vm.sh
+```
+
+The root `setup.sh` and `setup.ps1` are local-workstation scripts. The `bootstrap` scripts are
+VM scripts and must not be run on Windows, macOS, or your Linux workstation.
+
+## Configuration reference
+
+| Setting | Purpose |
+|---|---|
+| `region` | OCI region |
+| `oci_profile` | Profile in `~/.oci/config` or the Windows OCI config |
+| `tenancy_ocid` | Your OCI tenancy |
+| `compartment_ocid` | Target compartment; empty uses the tenancy |
+| `ssh_ingress_cidr` | CIDR allowed to SSH; use your IP with `/32` |
+| `ssh_public_key` | Optional existing public key |
+| `ssh_private_key_path` | Local key path generated by setup |
+| `instance_ocpus` / `instance_memory_gb` | ARM VM size |
+| `install_git` | Install Git in the VM |
+| `enable_provisioning` | `true` creates resources; `false` enables discovery mode |
+| `telegram.*` | Optional post-provisioning Telegram configuration |
+
+## Validation and cleanup
+
+Before publishing changes:
+
+```bash
+terraform -chdir=terraform fmt -check -recursive
+terraform -chdir=terraform init -backend=false
+terraform -chdir=terraform validate
+bash -n setup.sh bootstrap/setup-vm.sh
+```
+
+To remove resources created by Terraform:
+
+```bash
+terraform -chdir=terraform destroy
+```
+
+Review the destroy plan carefully. Manually created OCI resources are not managed by this
+repository.
+
+## Security notes
+
+- Keep `settings.yaml` and Terraform state private.
+- Use a narrow `ssh_ingress_cidr`; do not leave `0.0.0.0/0` unless necessary.
+- Never expose ports 5901, 6080, or 9222 publicly.
+- Use Tailscale Serve, not Tailscale Funnel, for noVNC.
+- Use separate Telegram bots and a non-empty allowlist.
+- Review third-party installer/version changes before production use.
+- Use a remote encrypted Terraform backend for team usage.
+
+## Troubleshooting
+
+### Terraform cannot authenticate
+
+Run `oci iam region-subscription list` using the same profile named in `settings.yaml` and verify
+that the profile's region and tenancy are correct.
+
+### SSH says `Permission denied (publickey)`
+
+Confirm the public key in `settings.yaml` matches the private key used with `ssh -i`, and check
+that `ssh_ingress_cidr` includes your current public IP.
+
+### Cloud-init failed
+
+Inspect:
+
+```bash
+sudo cloud-init status --long
+sudo tail -200 /var/log/cloud-init-output.log
+```
+
+### noVNC loads but the desktop is unavailable
+
+Check the loopback services on the VM:
+
+```bash
+ss -ltnp | grep -E ':(5901|6080|9222)'
+systemctl status agent-vnc agent-novnc agent-chrome
+```

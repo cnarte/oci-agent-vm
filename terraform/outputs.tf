@@ -22,7 +22,7 @@ output "subnet" {
   }
 }
 
-output "instance" {
+output "existing_instance" {
   value = var.instance_id == "" ? null : {
     id                  = data.oci_core_instance.existing[0].id
     name                = data.oci_core_instance.existing[0].display_name
@@ -31,9 +31,17 @@ output "instance" {
   }
 }
 
-output "vnic_attachments" {
+output "existing_vnic_attachments" {
   value = var.instance_id == "" ? [] : [for item in data.oci_core_vnic_attachments.instance[0].vnic_attachments : {
     id      = item.id
     vnic_id = item.vnic_id
   }]
+}
+
+output "created_instance_id" {
+  value = var.enable_provisioning ? oci_core_instance.agent[0].id : null
+}
+
+output "created_instance_public_ip" {
+  value = var.enable_provisioning ? oci_core_instance.agent[0].public_ip : null
 }
