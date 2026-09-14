@@ -78,6 +78,7 @@ resource "oci_core_instance" "agent" {
   count               = var.enable_provisioning ? 1 : 0
   compartment_id      = local.provision_compartment
   availability_domain = local.selected_availability_domain
+  fault_domain        = var.fault_domain != "" ? var.fault_domain : null
   display_name        = var.instance_name
   shape               = "VM.Standard.A1.Flex"
   shape_config {

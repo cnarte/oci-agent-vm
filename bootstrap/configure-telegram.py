@@ -41,18 +41,18 @@ def validate_token(value: object, name: str) -> str:
 
 def main() -> None:
     payload = json.load(sys.stdin)
-    users = payload.get("allowed_users", [])
-    if not isinstance(users, list) or not users or any(
-        not isinstance(user, (int, str)) or not USER_RE.fullmatch(str(user)) for user in users
-    ):
-        raise ValueError("allowed_users must contain at least one numeric Telegram user ID")
-    allowed = ",".join(str(user) for user in users)
     hermes_token = validate_token(payload.get("hermes_bot_token", ""), "hermes_bot_token")
     cc_token = validate_token(payload.get("cc_connect_bot_token", ""), "cc_connect_bot_token")
     if not hermes_token and not cc_token:
         print("No Telegram tokens supplied; integrations remain disabled.")
         return
 
+    users = payload.get("allowed_users", [])
+    if not isinstance(users, list) or not users or any(
+        not isinstance(user, (int, str)) or not USER_RE.fullmatch(str(user)) for user in users
+    ):
+        raise ValueError("allowed_users must contain at least one numeric Telegram user ID")
+    allowed = ",".join(str(user) for user in users)
     home = Path.home()
     configured = []
     if hermes_token:

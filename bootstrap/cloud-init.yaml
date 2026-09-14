@@ -2,8 +2,6 @@
 # VM ONLY: this file is uploaded as OCI user_data and runs inside the new VM.
 # Do not run it on the local workstation. Local orchestration lives in ../setup.sh.
 # Credentials are intentionally not embedded.
-bootcmd:
-  - [ bash, -lc, 'install -d -o ubuntu -g ubuntu -m 700 /home/ubuntu/.vnc /home/ubuntu/.config/remote-desktop /home/ubuntu/.config/chrome-agent-profile /home/ubuntu/.hermes' ]
 package_update: true
 packages:
 %{ if install_git }
@@ -15,6 +13,8 @@ packages:
   - openssl
   - ca-certificates
   - dbus-x11
+  - nodejs
+  - npm
   - xfce4
   - tigervnc-standalone-server
   - novnc
@@ -22,7 +22,7 @@ packages:
 
 write_files:
   - path: /home/ubuntu/.vnc/xstartup
-    owner: ubuntu:ubuntu
+    owner: root:root
     permissions: '0700'
     content: |
       #!/bin/sh
@@ -38,7 +38,7 @@ write_files:
       TELEGRAM_BOT_TOKEN=1234567890:REPLACE_WITH_BOTFATHER_TOKEN
       TELEGRAM_ALLOWED_USERS=REPLACE_WITH_TELEGRAM_USER_ID
   - path: /home/ubuntu/.config/remote-desktop/start-chrome.sh
-    owner: ubuntu:ubuntu
+    owner: root:root
     permissions: '0700'
     content: |
       #!/bin/sh
@@ -107,12 +107,12 @@ write_files:
       ${indent(6, configure_telegram_script)}
 
 runcmd:
-  - [ bash, -lc, 'install -d -o ubuntu -g ubuntu -m 700 /home/ubuntu/.vnc /home/ubuntu/.config/remote-desktop /home/ubuntu/.config/chrome-agent-profile' ]
+  - [ bash, -lc, 'chown ubuntu:ubuntu /home/ubuntu && chmod 750 /home/ubuntu && install -d -o ubuntu -g ubuntu -m 700 /home/ubuntu/.vnc /home/ubuntu/.config/remote-desktop /home/ubuntu/.config/chrome-agent-profile /home/ubuntu/.hermes && chown -R ubuntu:ubuntu /home/ubuntu/.vnc /home/ubuntu/.config /home/ubuntu/.hermes' ]
   - [ bash, -lc, 'curl -LsSf https://astral.sh/uv/install.sh | su - ubuntu -c "sh"' ]
   - [ bash, -lc, 'curl -fsSL https://dl.google.com/linux/direct/google-chrome-stable_current_arm64.deb -o /tmp/google-chrome.deb && apt-get install -y /tmp/google-chrome.deb' ]
   - [ bash, -lc, 'su - ubuntu -c "export PATH=\$HOME/.local/bin:\$PATH; uv tool install yt-dlp; uv tool install \"agent-reach[all] @ https://github.com/Panniantong/agent-reach/archive/main.zip\""' ]
   - [ bash, -lc, 'su - ubuntu -c "curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash -s -- --non-interactive"' ]
-  - [ bash, -lc, 'su - ubuntu -c "export PATH=\$HOME/.local/bin:\$HOME/.hermes/node/bin:\$PATH; npm install -g @earendil-works/pi-coding-agent cc-connect agent-browser"' ]
+  - [ bash, -lc, 'su - ubuntu -c "export PATH=\$HOME/.local/bin:\$HOME/.hermes/node/bin:\$PATH; npm config set prefix \"\$HOME/.local\"; npm install -g @earendil-works/pi-coding-agent cc-connect agent-browser"' ]
   - [ bash, -lc, 'su - ubuntu -c "export PATH=\$HOME/.local/bin:\$PATH; mkdir -p \$HOME/.hermes; cp /opt/telegram.env.example \$HOME/.hermes/.env.example; chmod 600 \$HOME/.hermes/.env.example"' ]
   - [ bash, -lc, 'curl -fsSL https://tailscale.com/install.sh | sh' ]
   - [ bash, -lc, 'pw=$(openssl rand -hex 8); printf "%s" "$pw" | vncpasswd -f > /home/ubuntu/.vnc/passwd; printf "%s\n" "$pw" > /home/ubuntu/.config/remote-desktop/vnc-password.txt; chown ubuntu:ubuntu /home/ubuntu/.vnc/passwd /home/ubuntu/.config/remote-desktop/vnc-password.txt; chmod 600 /home/ubuntu/.vnc/passwd /home/ubuntu/.config/remote-desktop/vnc-password.txt' ]

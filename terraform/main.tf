@@ -1,10 +1,11 @@
 # Existing-resource inventory. Set enable_provisioning=false when using only these data sources.
 
 locals {
-  selected_availability_domain = var.availability_domain != "" ? var.availability_domain : data.oci_identity_availability_domains.available.availability_domains[0].name
+  selected_availability_domain = var.availability_domain != "" ? var.availability_domain : var.enable_provisioning ? data.oci_identity_availability_domains.available[0].availability_domains[0].name : ""
 }
 
 data "oci_identity_availability_domains" "available" {
+  count          = var.enable_provisioning && var.availability_domain == "" ? 1 : 0
   compartment_id = var.tenancy_ocid
 }
 

@@ -5,13 +5,23 @@ set -euo pipefail
 cd "$(dirname "$0")/terraform"
 ROOT=$(cd .. && pwd)
 SETTINGS=${SETTINGS_FILE:-$ROOT/settings.yaml}
-command -v terraform >/dev/null || { echo 'Install Terraform first: https://developer.hashicorp.com/terraform/install'; exit 1; }
-command -v oci >/dev/null || { echo 'Install the OCI CLI first: https://docs.oracle.com/en-us/iaas/Content/API/SDKDocs/cliinstall.htm'; exit 1; }
+TERRAFORM=$(command -v terraform || true)
+[ -n "$TERRAFORM" ] || [ ! -x "$HOME/.local/bin/terraform" ] || TERRAFORM="$HOME/.local/bin/terraform"
+[ -n "$TERRAFORM" ] || { echo 'Install Terraform first: https://developer.hashicorp.com/terraform/install'; exit 1; }
+OCI=$(command -v oci || true)
+[ -n "$OCI" ] || [ ! -x "$HOME/bin/oci" ] || OCI="$HOME/bin/oci"
+[ -n "$OCI" ] || { echo 'Install the OCI CLI first: https://docs.oracle.com/en-us/iaas/Content/API/SDKDocs/cliinstall.htm'; exit 1; }
 command -v python3 >/dev/null || { echo 'Install Python 3 first: https://www.python.org/downloads/'; exit 1; }
 command -v ssh-keygen >/dev/null || { echo 'Install OpenSSH (including ssh-keygen) first.'; exit 1; }
 command -v ssh >/dev/null || { echo 'Install OpenSSH (including the ssh client) first.'; exit 1; }
 python3 -c 'import yaml' 2>/dev/null || { echo 'Install PyYAML first: python3 -m pip install --user pyyaml'; exit 1; }
 [ -f "$SETTINGS" ] || { echo "Missing $SETTINGS (copy settings.yaml.example first)"; exit 1; }
+ENABLE_PROVISIONING=$(python3 - "$SETTINGS" <<'PY'
+import sys, yaml
+s = yaml.safe_load(open(sys.argv[1])) or {}
+print('true' if s.get('enable_provisioning', True) is not False else 'false')
+PY
+)
 KEY_PATH=$(python3 - "$SETTINGS" <<'PY'
 import os, sys, yaml
 s = yaml.safe_load(open(sys.argv[1])) or {}
@@ -27,6 +37,9 @@ if [ -z "$SSH_PUBLIC" ]; then
   mkdir -p "$(dirname "$KEY_PATH")"; chmod 700 "$(dirname "$KEY_PATH")"
   [ -f "$KEY_PATH" ] || ssh-keygen -t ed25519 -f "$KEY_PATH" -N '' -C 'oci-agent-vm'
   SSH_PUBLIC=$(ssh-keygen -y -f "$KEY_PATH")
+elif [ ! -r "$KEY_PATH" ]; then
+  echo "ssh_private_key_path is required and readable when ssh_public_key is supplied: $KEY_PATH" >&2
+  exit 1
 fi
 export SSH_PUBLIC
 trap 'rm -f settings.auto.tfvars.json' EXIT
@@ -43,7 +56,7 @@ with open(sys.argv[1]) as f:
 # rather than being embedded in OCI metadata.
 allowed = {
     'region', 'oci_profile', 'tenancy_ocid', 'vcn_id', 'subnet_id',
-    'instance_id', 'enable_provisioning', 'availability_domain',
+    'instance_id', 'enable_provisioning', 'availability_domain', 'fault_domain',
     'compartment_ocid', 'ssh_public_key', 'instance_name',
     'instance_ocpus', 'instance_memory_gb', 'ssh_ingress_cidr', 'install_git',
 }
@@ -51,12 +64,16 @@ data = {k: v for k, v in data.items() if k in allowed}
 data['ssh_public_key'] = os.environ['SSH_PUBLIC'].strip()
 print(json.dumps(data, indent=2))
 PY
-terraform init
-terraform fmt -recursive
-terraform validate
-terraform plan
-terraform apply
-PUBLIC_IP=$(terraform output -raw created_instance_public_ip 2>/dev/null || true)
+"$TERRAFORM" init
+"$TERRAFORM" fmt -recursive
+"$TERRAFORM" validate
+"$TERRAFORM" plan
+if [ "$ENABLE_PROVISIONING" != true ]; then
+  printf 'Provisioning disabled; plan completed without applying changes.\n'
+  exit 0
+fi
+"$TERRAFORM" apply
+PUBLIC_IP=$("$TERRAFORM" output -raw created_instance_public_ip 2>/dev/null || true)
 if [ -n "$PUBLIC_IP" ] && [ "$PUBLIC_IP" != "null" ]; then
   printf '\nVM public IP: %s\n' "$PUBLIC_IP"
   printf 'SSH command: ssh -i %s ubuntu@%s\n' "$KEY_PATH" "$PUBLIC_IP"

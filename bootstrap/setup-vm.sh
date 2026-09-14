@@ -15,13 +15,16 @@ INSTALL_GIT=${INSTALL_GIT:-true}
 export DEBIAN_FRONTEND=noninteractive
 
 apt-get update
-packages=(ca-certificates curl wget jq openssl dbus-x11 xfce4 tigervnc-standalone-server novnc websockify)
+packages=(ca-certificates curl wget jq openssl dbus-x11 nodejs npm xfce4 tigervnc-standalone-server novnc websockify)
 if [ "$INSTALL_GIT" = "true" ]; then packages+=(git); fi
 apt-get install -y "${packages[@]}"
 
+chown "$TARGET_USER:$TARGET_USER" "$TARGET_HOME"
+chmod 750 "$TARGET_HOME"
 install -d -o "$TARGET_USER" -g "$TARGET_USER" -m 700 \
   "$TARGET_HOME/.vnc" "$TARGET_HOME/.config/remote-desktop" \
-  "$TARGET_HOME/.config/chrome-agent-profile" "$TARGET_HOME/.hermes"
+  "$TARGET_HOME/.config/chrome-agent-profile" "$TARGET_HOME/.hermes" "$TARGET_HOME/.local"
+chown -R "$TARGET_USER:$TARGET_USER" "$TARGET_HOME/.vnc" "$TARGET_HOME/.config" "$TARGET_HOME/.hermes" "$TARGET_HOME/.local"
 if [ -f "$SCRIPT_DIR/configure-telegram.py" ]; then
   install -o root -g root -m 0755 "$SCRIPT_DIR/configure-telegram.py" /usr/local/sbin/configure-agent-telegram.py
 fi
@@ -39,7 +42,7 @@ runuser -u "$TARGET_USER" -- env HOME="$TARGET_HOME" bash -lc \
 runuser -u "$TARGET_USER" -- env HOME="$TARGET_HOME" bash -lc \
   'curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash -s -- --non-interactive'
 runuser -u "$TARGET_USER" -- env HOME="$TARGET_HOME" bash -lc \
-  'export PATH="$HOME/.local/bin:$HOME/.hermes/node/bin:$PATH"; npm install -g @earendil-works/pi-coding-agent cc-connect agent-browser'
+  'export PATH="$HOME/.local/bin:$HOME/.hermes/node/bin:$PATH"; npm config set prefix "$HOME/.local"; npm install -g @earendil-works/pi-coding-agent cc-connect agent-browser'
 curl -fsSL https://tailscale.com/install.sh | sh
 
 cat > "$TARGET_HOME/.vnc/xstartup" <<'EOF'

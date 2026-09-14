@@ -35,13 +35,19 @@ variable "instance_id" {
 }
 
 variable "enable_provisioning" {
-  description = "Create the tutorial VM/network. Set false for read-only discovery."
+  description = "Create the tutorial VM/network. Set false only with a separate/fresh state for discovery; do not toggle on a managed state."
   type        = bool
   default     = true
 }
 
 variable "availability_domain" {
   description = "OCI availability domain for a new instance. Leave empty to use the first AD in the selected region."
+  type        = string
+  default     = ""
+}
+
+variable "fault_domain" {
+  description = "Optional OCI fault domain for a new instance. Leave empty for OCI placement."
   type        = string
   default     = ""
 }

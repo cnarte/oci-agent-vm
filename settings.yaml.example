@@ -9,6 +9,8 @@ instance_name: personal-agent
 instance_ocpus: 1
 instance_memory_gb: 6
 ssh_ingress_cidr: 0.0.0.0/0 # replace with your public-IP/32 when possible
+availability_domain: "" # blank selects the first AD in the selected region
+fault_domain: "" # blank lets OCI choose; try FAULT-DOMAIN-1/2/3 if capacity is tight
 install_git: true # skip the base Git package with false; Hermes may still install Git
 telegram:
   hermes_bot_token: ""

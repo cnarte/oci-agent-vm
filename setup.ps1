@@ -27,6 +27,8 @@ python -c "import yaml" 2>$null
 if ($LASTEXITCODE -ne 0) { throw 'PyYAML is required. Install it with: python -m pip install --user pyyaml' }
 $YamlJson = Get-Content -Raw $Settings | python -c "import sys,json,yaml; print(json.dumps(yaml.safe_load(sys.stdin.read()) or {}))"
 $Config = $YamlJson | ConvertFrom-Json
+$EnableProvisioning = $Config.enable_provisioning
+if ($null -eq $EnableProvisioning) { $EnableProvisioning = $true }
 
 $KeyPath = $Config.ssh_private_key_path
 if ([string]::IsNullOrWhiteSpace($KeyPath)) { $KeyPath = '~/.ssh/oci-agent-vm_ed25519' }
@@ -41,11 +43,13 @@ if ([string]::IsNullOrWhiteSpace($PublicKey)) {
         ssh-keygen -t ed25519 -f $KeyPath -N '' -C 'oci-agent-vm'
     }
     $PublicKey = (Get-Content "$KeyPath.pub" -Raw).Trim()
+} elseif (-not (Test-Path $KeyPath -PathType Leaf)) {
+    throw "ssh_private_key_path is required when ssh_public_key is supplied: $KeyPath"
 }
 
 $Allowed = @(
     'region', 'oci_profile', 'tenancy_ocid', 'vcn_id', 'subnet_id',
-    'instance_id', 'enable_provisioning', 'availability_domain',
+    'instance_id', 'enable_provisioning', 'availability_domain', 'fault_domain',
     'compartment_ocid', 'ssh_public_key', 'instance_name',
     'instance_ocpus', 'instance_memory_gb', 'ssh_ingress_cidr', 'install_git'
 )
@@ -66,6 +70,10 @@ try {
     terraform fmt -recursive
     terraform validate
     terraform plan
+    if (-not [bool]$EnableProvisioning) {
+        Write-Host 'Provisioning disabled; plan completed without applying changes.'
+        return
+    }
     terraform apply
     $PublicIp = terraform output -raw created_instance_public_ip 2>$null
     if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($PublicIp) -and $PublicIp -ne 'null') {

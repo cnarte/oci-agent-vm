@@ -1,3 +1,5 @@
+# Discovery-only example. Use a separate/fresh Terraform state and do not apply it
+# against a state that already manages resources from provision.tf.
 region         = "ap-mumbai-1"
 oci_profile    = "DEFAULT"
 tenancy_ocid   = "ocid1.tenancy.oc1..REPLACE_ME"
