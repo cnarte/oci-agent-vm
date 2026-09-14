@@ -1,5 +1,7 @@
 #cloud-config
-# Full first-boot bootstrap. Credentials are intentionally not embedded.
+# VM ONLY: this file is uploaded as OCI user_data and runs inside the new VM.
+# Do not run it on the local workstation. Local orchestration lives in ../setup.sh.
+# Credentials are intentionally not embedded.
 package_update: true
 packages:
   - zsh

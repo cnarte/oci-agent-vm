@@ -41,6 +41,28 @@ resource "oci_core_route_table" "agent" {
   }
 }
 
+resource "oci_core_security_list" "agent" {
+  count          = var.enable_provisioning ? 1 : 0
+  compartment_id = local.provision_compartment
+  vcn_id         = oci_core_vcn.agent[0].id
+  display_name   = "${var.instance_name}-security"
+
+  ingress_security_rules {
+    protocol    = "6"
+    source      = var.ssh_ingress_cidr
+    source_type = "CIDR_BLOCK"
+    tcp_options {
+      min = 22
+      max = 22
+    }
+  }
+
+  egress_security_rules {
+    protocol    = "all"
+    destination = "0.0.0.0/0"
+  }
+}
+
 resource "oci_core_subnet" "agent" {
   count                      = var.enable_provisioning ? 1 : 0
   compartment_id             = local.provision_compartment
@@ -48,6 +70,7 @@ resource "oci_core_subnet" "agent" {
   display_name               = "${var.instance_name}-subnet"
   cidr_block                 = "10.0.1.0/24"
   route_table_id             = oci_core_route_table.agent[0].id
+  security_list_ids          = [oci_core_security_list.agent[0].id]
   prohibit_public_ip_on_vnic = false
 }
 
@@ -66,6 +89,10 @@ resource "oci_core_instance" "agent" {
     assign_public_ip = true
     display_name     = "${var.instance_name}-vnic"
   }
+  instance_options {
+    are_legacy_imds_endpoints_disabled = true
+  }
+  is_pv_encryption_in_transit_enabled = true
   source_details {
     source_type = "image"
     source_id   = data.oci_core_images.ubuntu_arm64[0].images[0].id

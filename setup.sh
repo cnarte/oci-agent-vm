@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# LOCAL MACHINE ONLY: run this from the user's laptop/workstation.
+# VM bootstrap code lives in bootstrap/cloud-init.yaml and runs only on first boot.
 set -euo pipefail
 cd "$(dirname "$0")/terraform"
 ROOT=$(cd .. && pwd)
@@ -30,6 +32,16 @@ except ImportError:
     raise SystemExit('PyYAML is required: sudo apt-get install python3-yaml')
 with open(sys.argv[1]) as f:
     data = yaml.safe_load(f) or {}
+# Keep non-Terraform settings (Telegram tokens, key path, etc.) out of
+# Terraform variables/state. They are handled by a later, explicit post-boot
+# step rather than being embedded in OCI metadata.
+allowed = {
+    'region', 'oci_profile', 'tenancy_ocid', 'vcn_id', 'subnet_id',
+    'instance_id', 'enable_provisioning', 'availability_domain',
+    'compartment_ocid', 'ssh_public_key', 'instance_name',
+    'instance_ocpus', 'instance_memory_gb', 'ssh_ingress_cidr',
+}
+data = {k: v for k, v in data.items() if k in allowed}
 data['ssh_public_key'] = os.environ['SSH_PUBLIC'].strip()
 print(json.dumps(data, indent=2))
 PY

@@ -1,6 +1,8 @@
-# VM setup walkthrough
+# VM-only setup walkthrough
 
-Run as the `ubuntu` user after Terraform/cloud-init completes.
+This document is for commands run **inside the provisioned VM** over SSH. Do not run these
+commands on the local workstation. The local entrypoint is the repository root `./setup.sh`.
+Terraform uploads `cloud-init.yaml`, which runs automatically inside the VM.
 
 ## 1. Shell and runtime
 

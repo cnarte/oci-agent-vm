@@ -72,3 +72,9 @@ variable "instance_memory_gb" {
   type    = number
   default = 6
 }
+
+variable "ssh_ingress_cidr" {
+  description = "CIDR allowed to SSH to the new VM. Prefer your fixed public IP/32."
+  type        = string
+  default     = "0.0.0.0/0"
+}
