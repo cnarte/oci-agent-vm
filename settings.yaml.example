@@ -9,4 +9,8 @@ instance_name: personal-agent
 instance_ocpus: 1
 instance_memory_gb: 6
 ssh_ingress_cidr: 0.0.0.0/0 # replace with your public-IP/32 when possible
+telegram:
+  hermes_bot_token: ""
+  cc_connect_bot_token: ""
+  allowed_users: []
 enable_provisioning: true
