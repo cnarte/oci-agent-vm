@@ -1,4 +1,5 @@
-# Discovery-only example. Use a separate/fresh Terraform state and do not apply it
+# Discovery-only example for running Terraform directly. The root setup scripts derive the
+# tenancy OCID from the selected OCI CLI profile. Use a separate/fresh Terraform state and do not apply it
 # against a state that already manages resources from provision.tf.
 region         = "ap-mumbai-1"
 oci_profile    = "DEFAULT"

@@ -15,16 +15,48 @@ INSTALL_GIT=${INSTALL_GIT:-true}
 export DEBIAN_FRONTEND=noninteractive
 
 apt-get update
-packages=(ca-certificates curl wget jq openssl dbus-x11 nodejs npm xfce4 tigervnc-standalone-server novnc websockify)
+packages=(ca-certificates curl wget jq openssl dbus-x11 xfce4 tigervnc-standalone-server novnc websockify)
 if [ "$INSTALL_GIT" = "true" ]; then packages+=(git); fi
 apt-get install -y "${packages[@]}"
 
+# Codex CLI and the current Hermes tooling require a modern Node.js runtime.
+curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+apt-get install -y nodejs
+
 chown "$TARGET_USER:$TARGET_USER" "$TARGET_HOME"
 chmod 750 "$TARGET_HOME"
+cat > /etc/profile.d/agent-local-bin.sh <<EOF
+export PATH=$TARGET_HOME/.local/bin:$TARGET_HOME/.hermes/node/bin:\$PATH
+EOF
+chmod 0644 /etc/profile.d/agent-local-bin.sh
 install -d -o "$TARGET_USER" -g "$TARGET_USER" -m 700 \
   "$TARGET_HOME/.vnc" "$TARGET_HOME/.config/remote-desktop" \
-  "$TARGET_HOME/.config/chrome-agent-profile" "$TARGET_HOME/.hermes" "$TARGET_HOME/.local"
+  "$TARGET_HOME/.config/chrome-agent-profile" "$TARGET_HOME/.config/autostart" \
+  "$TARGET_HOME/.config/xfce4/xfconf/xfce-perchannel-xml" \
+  "$TARGET_HOME/.hermes" "$TARGET_HOME/.local"
 chown -R "$TARGET_USER:$TARGET_USER" "$TARGET_HOME/.vnc" "$TARGET_HOME/.config" "$TARGET_HOME/.hermes" "$TARGET_HOME/.local"
+cat > "$TARGET_HOME/.config/autostart/xfce4-screensaver.desktop" <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=XFCE Screensaver
+Hidden=true
+X-GNOME-Autostart-enabled=false
+EOF
+chown "$TARGET_USER:$TARGET_USER" "$TARGET_HOME/.config/autostart/xfce4-screensaver.desktop"
+chmod 0644 "$TARGET_HOME/.config/autostart/xfce4-screensaver.desktop"
+cat > "$TARGET_HOME/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-screensaver.xml" <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xfce4-screensaver" version="1.0">
+  <property name="saver" type="empty">
+    <property name="enabled" type="bool" value="false"/>
+  </property>
+  <property name="lock" type="empty">
+    <property name="enabled" type="bool" value="false"/>
+  </property>
+</channel>
+EOF
+chown "$TARGET_USER:$TARGET_USER" "$TARGET_HOME/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-screensaver.xml"
+chmod 0644 "$TARGET_HOME/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-screensaver.xml"
 if [ -f "$SCRIPT_DIR/configure-telegram.py" ]; then
   install -o root -g root -m 0755 "$SCRIPT_DIR/configure-telegram.py" /usr/local/sbin/configure-agent-telegram.py
 fi
@@ -42,7 +74,7 @@ runuser -u "$TARGET_USER" -- env HOME="$TARGET_HOME" bash -lc \
 runuser -u "$TARGET_USER" -- env HOME="$TARGET_HOME" bash -lc \
   'curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash -s -- --non-interactive'
 runuser -u "$TARGET_USER" -- env HOME="$TARGET_HOME" bash -lc \
-  'export PATH="$HOME/.local/bin:$HOME/.hermes/node/bin:$PATH"; npm config set prefix "$HOME/.local"; npm install -g @earendil-works/pi-coding-agent cc-connect agent-browser'
+  'export PATH="$HOME/.local/bin:$HOME/.hermes/node/bin:$PATH"; npm config set prefix "$HOME/.local"; npm install -g @earendil-works/pi-coding-agent @openai/codex cc-connect agent-browser'
 curl -fsSL https://tailscale.com/install.sh | sh
 
 cat > "$TARGET_HOME/.vnc/xstartup" <<'EOF'

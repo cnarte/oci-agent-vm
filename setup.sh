@@ -16,6 +16,47 @@ command -v ssh-keygen >/dev/null || { echo 'Install OpenSSH (including ssh-keyge
 command -v ssh >/dev/null || { echo 'Install OpenSSH (including the ssh client) first.'; exit 1; }
 python3 -c 'import yaml' 2>/dev/null || { echo 'Install PyYAML first: python3 -m pip install --user pyyaml'; exit 1; }
 [ -f "$SETTINGS" ] || { echo "Missing $SETTINGS (copy settings.yaml.example first)"; exit 1; }
+OCI_PROFILE=$(python3 - "$SETTINGS" <<'PY'
+import sys, yaml
+s = yaml.safe_load(open(sys.argv[1])) or {}
+print(s.get('oci_profile') or 'DEFAULT')
+PY
+)
+if ! "$OCI" iam region-subscription list --profile "$OCI_PROFILE" >/dev/null; then
+  echo "OCI CLI authentication failed for profile '$OCI_PROFILE'. Configure or log in to OCI before running setup.sh." >&2
+  echo "Verify with: $OCI iam region-subscription list --profile $OCI_PROFILE" >&2
+  exit 1
+fi
+TENANCY_OCID=$(python3 - "$SETTINGS" "$OCI_PROFILE" <<'PY'
+import configparser, os, sys, yaml
+
+settings = yaml.safe_load(open(sys.argv[1])) or {}
+configured = str(settings.get('tenancy_ocid') or '').strip()
+if configured and 'REPLACE' not in configured.upper() and 'YOUR_TENANCY' not in configured.upper():
+    print(configured)
+    raise SystemExit(0)
+
+profile = sys.argv[2]
+config_path = os.path.expanduser(os.environ.get('OCI_CLI_CONFIG_FILE', '~/.oci/config'))
+parser = configparser.RawConfigParser()
+if not parser.read(config_path):
+    raise SystemExit(f"OCI config file not found: {config_path}")
+if profile == parser.default_section:
+    values = parser.defaults()
+elif parser.has_section(profile):
+    values = parser[profile]
+else:
+    raise SystemExit(f"OCI profile not found in {config_path}: {profile}")
+tenancy = values.get('tenancy', '').strip()
+if not tenancy:
+    raise SystemExit(f"OCI profile has no tenancy OCID: {profile}")
+print(tenancy)
+PY
+) || {
+  echo "Could not determine the tenancy OCID from OCI profile '$OCI_PROFILE'. Set tenancy_ocid in settings.yaml to override it." >&2
+  exit 1
+}
+export TENANCY_OCID
 ENABLE_PROVISIONING=$(python3 - "$SETTINGS" <<'PY'
 import sys, yaml
 s = yaml.safe_load(open(sys.argv[1])) or {}
@@ -62,6 +103,7 @@ allowed = {
 }
 data = {k: v for k, v in data.items() if k in allowed}
 data['ssh_public_key'] = os.environ['SSH_PUBLIC'].strip()
+data['tenancy_ocid'] = os.environ['TENANCY_OCID']
 print(json.dumps(data, indent=2))
 PY
 "$TERRAFORM" init
@@ -77,6 +119,29 @@ PUBLIC_IP=$("$TERRAFORM" output -raw created_instance_public_ip 2>/dev/null || t
 if [ -n "$PUBLIC_IP" ] && [ "$PUBLIC_IP" != "null" ]; then
   printf '\nVM public IP: %s\n' "$PUBLIC_IP"
   printf 'SSH command: ssh -i %s ubuntu@%s\n' "$KEY_PATH" "$PUBLIC_IP"
+
+  VNC_SSH_ARGS=(-i "$KEY_PATH" -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10)
+  printf 'Waiting for SSH/cloud-init before retrieving the VNC password...\n'
+  VNC_SSH_READY=false
+  for _ in $(seq 1 30); do
+    if ssh "${VNC_SSH_ARGS[@]}" "ubuntu@$PUBLIC_IP" 'true' >/dev/null 2>&1; then
+      VNC_SSH_READY=true
+      break
+    fi
+    sleep 10
+  done
+  if [ "$VNC_SSH_READY" = true ] && ssh "${VNC_SSH_ARGS[@]}" "ubuntu@$PUBLIC_IP" 'timeout 900 cloud-init status --wait' >/dev/null 2>&1; then
+    VNC_PASSWORD=$(ssh "${VNC_SSH_ARGS[@]}" "ubuntu@$PUBLIC_IP" 'cat ~/.config/remote-desktop/vnc-password.txt' 2>/dev/null || true)
+    if [ -n "$VNC_PASSWORD" ]; then
+      printf 'VNC password: %s\n' "$VNC_PASSWORD"
+      printf 'VNC password file: ~/.config/remote-desktop/vnc-password.txt\n'
+      printf 'Warning: treat the VNC password as a secret and do not commit or share it.\n' >&2
+    else
+      printf 'Warning: VNC password was not available; retrieve it over SSH after cloud-init completes.\n' >&2
+    fi
+  else
+    printf 'Warning: SSH/cloud-init was not ready; VNC password was not retrieved.\n' >&2
+  fi
 
   TELEGRAM_PAYLOAD=$(python3 - "$SETTINGS" <<'PY'
 import json, re, sys, yaml

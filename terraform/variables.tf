@@ -11,7 +11,7 @@ variable "oci_profile" {
 }
 
 variable "tenancy_ocid" {
-  description = "Tenancy OCID used to scope discovery."
+  description = "Tenancy OCID used to scope discovery; the root setup scripts read it from the selected OCI profile."
   type        = string
   sensitive   = true
 }

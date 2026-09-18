@@ -16,6 +16,7 @@ Hermes Agent, pi, cc-connect, Agent Reach, VNC/noVNC, and Tailscale.
   - [Linux and macOS](#linux-and-macos)
   - [Windows](#windows)
 - [After provisioning](#after-provisioning)
+- [AI agent setup runbook](#ai-agent-setup-runbook)
 - [Manual VM path](#manual-vm-path)
 - [Configuration reference](#configuration-reference)
 - [Validation and cleanup](#validation-and-cleanup)
@@ -42,7 +43,7 @@ Hermes Agent, pi, cc-connect, Agent Reach, VNC/noVNC, and Tailscale.
 - Official Google Chrome for Linux ARM64
 - Persistent Chrome profile at `~/.config/chrome-agent-profile`
 - Chrome DevTools Protocol on `127.0.0.1:9222`
-- uv, pi, Hermes Agent, cc-connect, and Agent Reach
+- uv, pi, Hermes Agent, Codex CLI, cc-connect, and Agent Reach
 - Tailscale
 
 VNC, noVNC, and CDP are not opened in OCI security rules. Remote desktop access should use
@@ -54,12 +55,18 @@ Tailscale Serve or an SSH tunnel.
 
 1. [Create an Oracle Cloud account](https://www.oracle.com/cloud/free/).
 2. Install the [OCI CLI](https://docs.oracle.com/en-us/iaas/Content/API/SDKDocs/cliinstall.htm).
-3. Configure it with [`oci setup config`](https://docs.oracle.com/en-us/iaas/Content/API/SDKDocs/cliconfigure.htm).
-4. Verify the selected profile:
+3. Configure and authenticate the OCI CLI **before** running either setup script with
+   [`oci setup config`](https://docs.oracle.com/en-us/iaas/Content/API/SDKDocs/cliconfigure.htm)
+   (or your existing OCI session).
+4. Verify the profile that will be used in `settings.yaml`:
 
    ```bash
-   oci iam region-subscription list
+   oci iam region-subscription list --profile DEFAULT
    ```
+
+   Replace `DEFAULT` with the value of `oci_profile` if you use another profile. The setup
+   scripts do not install, configure, or log in to OCI; authenticated OCI CLI access is a
+   prerequisite.
 
 ### Local tools
 
@@ -137,8 +144,7 @@ Edit `settings.yaml`:
 ```yaml
 region: ap-mumbai-1
 oci_profile: DEFAULT
-tenancy_ocid: ocid1.tenancy.oc1..YOUR_TENANCY
-compartment_ocid: ""
+compartment_ocid: "" # empty uses the tenancy from the authenticated OCI profile
 ssh_public_key: ""
 ssh_private_key_path: ~/.ssh/oci-agent-vm_ed25519
 ssh_ingress_cidr: 203.0.113.10/32
@@ -156,8 +162,10 @@ telegram:
   allowed_users: []
 ```
 
-Leave `ssh_public_key` empty to let the script generate an Ed25519 key. The private key remains
-on your workstation; only its public half is sent to OCI.
+The setup script reads the tenancy OCID from the authenticated OCI profile, so
+`tenancy_ocid` is not required in `settings.yaml`; set it only when you intentionally need to
+override the profile. Leave `ssh_public_key` empty to let the script generate an Ed25519 key. The
+private key remains on your workstation; only its public half is sent to OCI.
 
 Run the local orchestrator:
 
@@ -182,10 +190,10 @@ Install:
 - [Python for Windows](https://www.python.org/downloads/windows/)
 - Windows OpenSSH client
 
-Then:
+Then (the OCI CLI must already be configured and authenticated as described in
+[Prerequisites](#prerequisites)):
 
 ```powershell
-oci setup config
 python -m pip install --user pyyaml
 Invoke-WebRequest https://github.com/YOUR_USERNAME/oci-agent-vm/archive/refs/heads/main.zip -OutFile agent-vm.zip
 Expand-Archive agent-vm.zip -DestinationPath .
@@ -227,11 +235,17 @@ sudo tailscale serve --bg 6080
 sudo tailscale serve status
 ```
 
-Open the generated HTTPS tailnet URL in your local browser. The VNC password is stored at:
+Open the generated HTTPS tailnet URL in your local browser. After cloud-init completes, the setup
+script prints the VNC password once. To print it again from the Windows workstation:
 
-```bash
-cat ~/.config/remote-desktop/vnc-password.txt
+```powershell
+.\ssh-vm.ps1 -PrintVncPassword
+# or, with the persistent alias:
+vmssh -PrintVncPassword
 ```
+
+On the VM, the password is stored at `~/.config/remote-desktop/vnc-password.txt`. Treat it as a
+secret; do not commit or share it.
 
 Log into websites through the visible Chrome window. Credentials and cookies remain in the VM's
 persistent Chrome profile.
@@ -247,7 +261,44 @@ hermes gateway                 # start Hermes Telegram/messaging gateway when co
 cc-connect                    # start cc-connect separately when configured
 ```
 
-Run the two gateway commands in separate terminal sessions if you configure both bots.
+Run the two gateway commands in separate terminal sessions if you configure both bots. If the
+post-boot Telegram transfer reports a failure, use the stdin-based fallback in
+[`AGENTS.md`](AGENTS.md).
+
+### SSH shortcut on Windows
+
+The repository includes `ssh-vm.ps1`, which reads the Terraform-managed IP and the configured
+private-key path. From the repository, connect with:
+
+```powershell
+.\ssh-vm.ps1
+```
+
+On this workstation, the persistent PowerShell function `vmssh` has also been added, so future
+sessions can connect with:
+
+```powershell
+vmssh
+```
+
+Pass a remote command after the alias when needed, for example `vmssh true`. To complete the
+interactive services setup, connect and run:
+
+```powershell
+vmssh
+sudo tailscale up
+sudo tailscale serve --bg 6080
+codex login
+```
+
+Complete the Tailscale and Codex authentication prompts yourself; they must not be automated.
+
+## AI agent setup runbook
+
+For an AI coding agent to repeat this setup safely, use
+[`AGENTS.md`](AGENTS.md). It covers OCI authentication prerequisites, platform-specific
+orchestration, plan/apply approval, VM verification, Tailscale and Telegram follow-up, and the
+completion checklist. It does not log in to OCI or handle credentials on the user's behalf.
 
 ## Manual VM path
 
@@ -302,8 +353,8 @@ VM scripts and must not be run on Windows, macOS, or your Linux workstation.
 | Setting | Purpose |
 |---|---|
 | `region` | OCI region |
-| `oci_profile` | Profile in `~/.oci/config` or the Windows OCI config |
-| `tenancy_ocid` | Your OCI tenancy |
+| `oci_profile` | Profile in `~/.oci/config` or the Windows OCI config; its tenancy is discovered automatically |
+| `tenancy_ocid` | Optional tenancy OCID override; normally read from the authenticated OCI profile |
 | `compartment_ocid` | Target compartment; empty uses the tenancy |
 | `ssh_ingress_cidr` | CIDR allowed to SSH; use your IP with `/32` |
 | `ssh_public_key` | Optional existing public key; when set, the matching private key must be readable at `ssh_private_key_path` |
@@ -354,10 +405,11 @@ repository.
 
 ## Troubleshooting
 
-### Terraform cannot authenticate
+### OCI CLI authentication fails
 
-Run `oci iam region-subscription list` using the same profile named in `settings.yaml` and verify
-that the profile's region and tenancy are correct.
+Run `oci iam region-subscription list --profile YOUR_PROFILE` using the same profile named in
+`settings.yaml`, then verify that the profile's region and tenancy are correct. Both setup scripts
+check this prerequisite before starting Terraform.
 
 ### SSH says `Permission denied (publickey)`
 

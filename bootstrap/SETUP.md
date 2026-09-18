@@ -22,7 +22,7 @@ Agent Reach. If a manual re-run is needed, use `bootstrap/setup-vm.sh` as root.
 
 ```bash
 export PATH="$HOME/.local/bin:$PATH"
-npm install -g @earendil-works/pi-coding-agent cc-connect agent-browser
+npm install -g @earendil-works/pi-coding-agent @openai/codex cc-connect agent-browser
 uv tool install 'agent-reach[all] @ https://github.com/Panniantong/agent-reach/archive/main.zip'
 ```
 
@@ -30,9 +30,13 @@ Verify:
 
 ```bash
 pi --version
+codex --version
 cc-connect --version
 agent-browser --version
 agent-reach --version
+
+# Interactive provider authentication
+codex login
 ```
 
 ## 3. Telegram
@@ -76,3 +80,6 @@ hermes config set browser.cdp_url http://127.0.0.1:9222
 ```
 
 Never expose port 9222 publicly; use Tailscale/SSH for remote access.
+
+The VNC password is stored at `~/.config/remote-desktop/vnc-password.txt`. Read it only over the
+protected SSH session and treat it as a secret.
